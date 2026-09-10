@@ -1,0 +1,1036 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>হিসাবের খাতা — সমবায় খামার</title>
+
+<!-- React -->
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<!-- Firebase (compat SDK — সাধারণ <script> ট্যাগেই কাজ করে, module দরকার নেই) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<!-- Babel (ব্রাউজারেই JSX কোড রূপান্তর করে, তাই বিল্ড স্টেপ লাগে না) -->
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Tiro+Bangla&family=Hind+Siliguri:wght@400;500;600;700&display=swap');
+  * { box-sizing: border-box; }
+  html, body, #root { height: 100%; margin: 0; }
+  body { font-family: 'Hind Siliguri', sans-serif; }
+  input:focus, select:focus { border-bottom-color: #9C6B0F !important; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div style="padding:40px;text-align:center;color:#6B6252;">হিসাবের খাতা খোলা হচ্ছে…</div>
+</div>
+
+<script>
+  // ---------- Firebase কনফিগ ----------
+  const firebaseConfig = {
+    apiKey: "AIzaSyBy__iG6RYhCbcvR8FuQ4qHbCvko6X4Nko",
+    authDomain: "khamar-hisab-69cc5.firebaseapp.com",
+    projectId: "khamar-hisab-69cc5",
+    storageBucket: "khamar-hisab-69cc5.firebasestorage.app",
+    messagingSenderId: "713119245953",
+    appId: "1:713119245953:web:633e65e5d6d6d7a2098f80",
+    measurementId: "G-8WLLNZWG2C",
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const KV = "kv";
+
+  function safeId(key) { return encodeURIComponent(key); }
+
+  window.storage = {
+    async get(key, shared = false) {
+      if (!shared) {
+        const v = localStorage.getItem(key);
+        if (v === null) throw new Error("key not found: " + key);
+        return { key, value: v, shared };
+      }
+      const snap = await db.collection(KV).doc(safeId(key)).get();
+      if (!snap.exists) throw new Error("key not found: " + key);
+      return { key, value: snap.data().value, shared };
+    },
+    async set(key, value, shared = false) {
+      if (!shared) {
+        localStorage.setItem(key, value);
+        return { key, value, shared };
+      }
+      await db.collection(KV).doc(safeId(key)).set({ key, value });
+      return { key, value, shared };
+    },
+    async delete(key, shared = false) {
+      if (!shared) {
+        localStorage.removeItem(key);
+        return { key, deleted: true, shared };
+      }
+      await db.collection(KV).doc(safeId(key)).delete();
+      return { key, deleted: true, shared };
+    },
+    async list(prefix = "", shared = false) {
+      if (!shared) {
+        const keys = Object.keys(localStorage).filter((k) => k.startsWith(prefix));
+        return { keys, prefix, shared };
+      }
+      const snap = await db.collection(KV).get();
+      const keys = snap.docs.map((d) => d.data().key || d.id).filter((k) => k.startsWith(prefix));
+      return { keys, prefix, shared };
+    },
+  };
+</script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useCallback, useRef } = React;
+
+/* ---------------------------------------------------------
+   ডিজাইন টোকেন
+--------------------------------------------------------- */
+const T = {
+  paper: "#F3EEDF", paperDark: "#EAE2CC", card: "#FFFDF7", rule: "#B9CFE0",
+  margin: "#A63D40", ink: "#242A26", inkSoft: "#6B6252", gold: "#9C6B0F",
+  border: "#DCD3B8", cow: "#8B5A2B", chicken: "#B07F1E", goat: "#3F6B4A",
+  whatsapp: "#2A7A6B", neutral: "#3B4A55", danger: "#A63D40",
+};
+
+const FARMS = {
+  cow: { label: "গরুর খামার", color: T.cow, icon: "🐾",
+    expenseCats: ["গো-খাদ্য", "ওষুধ ও চিকিৎসা", "শ্রমিক মজুরি", "অন্যান্য"],
+    incomeCats: ["দুধ বিক্রি", "পশু বিক্রি", "অন্যান্য"] },
+  chicken: { label: "মুরগির ফার্ম", color: T.chicken, icon: "🥚",
+    expenseCats: ["মুরগির খাবার", "ওষুধ ও ভ্যাকসিন", "শ্রমিক মজুরি", "অন্যান্য"],
+    incomeCats: ["ডিম বিক্রি", "মুরগি বিক্রি", "অন্যান্য"] },
+  goat: { label: "ছাগলের ফার্ম", color: T.goat, icon: "🐾",
+    expenseCats: ["খাবার", "ওষুধ ও চিকিৎসা", "শ্রমিক মজুরি", "অন্যান্য"],
+    incomeCats: ["ছাগল বিক্রি", "দুধ বিক্রি", "অন্যান্য"] },
+};
+
+const emptyRecords = () => ({ deposits: [], expenses: [], incomes: [] });
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const taka = (n) => "৳" + (Number(n) || 0).toLocaleString("en-US", { maximumFractionDigits: 0 });
+const sum = (arr, f) => arr.reduce((a, b) => a + (Number(f(b)) || 0), 0);
+
+const STORAGE_KEYS = {
+  members: "members", whatsapp: "whatsapp-contacts", pin: "app-pin",
+  cow: "records-cow", chicken: "records-chicken", goat: "records-goat",
+};
+
+/* ---------------------------------------------------------
+   ছোট UI উপাদান
+--------------------------------------------------------- */
+function Emoji({ children, size = 16 }) {
+  return <span style={{ fontSize: size, lineHeight: 1, display: "inline-block" }}>{children}</span>;
+}
+
+function Field({ label, children }) {
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 130px", minWidth: 110 }}>
+      <span style={{ fontSize: 12.5, color: T.inkSoft }}>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+const inputStyle = {
+  border: "none", borderBottom: `1.5px solid ${T.border}`, background: "transparent",
+  padding: "6px 2px", fontSize: 14.5, color: T.ink, fontFamily: "'Hind Siliguri', sans-serif",
+  outline: "none", width: "100%",
+};
+
+function TextInput(props) {
+  return <input {...props} style={{ ...inputStyle, ...(props.style || {}) }} />;
+}
+function SelectInput(props) {
+  return <select {...props} style={{ ...inputStyle, ...(props.style || {}) }}>{props.children}</select>;
+}
+
+function LedgerButton({ children, onClick, color = T.neutral, style, disabled }) {
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      background: disabled ? T.border : color, color: "#FFFDF7", border: "none", borderRadius: 3,
+      padding: "8px 16px", fontSize: 14, fontFamily: "'Hind Siliguri', sans-serif", fontWeight: 600,
+      cursor: disabled ? "not-allowed" : "pointer", display: "inline-flex", alignItems: "center",
+      gap: 6, whiteSpace: "nowrap", ...style,
+    }}>{children}</button>
+  );
+}
+
+function TwoStepDelete({ onConfirm }) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 2500);
+    return () => clearTimeout(t);
+  }, [armed]);
+  return armed ? (
+    <button onClick={onConfirm} style={{ border: `1px solid ${T.danger}`, background: T.danger, color: "#fff",
+      borderRadius: 3, padding: "4px 8px", fontSize: 12.5, cursor: "pointer", fontFamily: "'Hind Siliguri', sans-serif" }}>
+      নিশ্চিত?
+    </button>
+  ) : (
+    <button onClick={() => setArmed(true)} title="মুছুন"
+      style={{ border: "none", background: "transparent", color: T.inkSoft, cursor: "pointer", padding: 4, display: "flex" }}>
+      <Emoji size={16}>🗑️</Emoji>
+    </button>
+  );
+}
+
+function TwoStepBulk({ onConfirm, label = "সব মুছুন" }) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 3000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  return (
+    <button onClick={() => (armed ? onConfirm() : setArmed(true))} style={{
+      border: `1px solid ${armed ? T.danger : T.border}`, background: armed ? T.danger : "transparent",
+      color: armed ? "#fff" : T.inkSoft, borderRadius: 3, padding: "6px 10px", fontSize: 12.5,
+      cursor: "pointer", fontFamily: "'Hind Siliguri', sans-serif", display: "inline-flex", alignItems: "center", gap: 5,
+    }}>
+      <Emoji size={13}>🗑️</Emoji> {armed ? "নিশ্চিত করুন?" : label}
+    </button>
+  );
+}
+
+function PdfButton({ onClick, color = T.neutral }) {
+  return (
+    <button onClick={onClick} style={{
+      border: `1px solid ${color}`, background: "transparent", color, borderRadius: 3, padding: "6px 10px",
+      fontSize: 12.5, cursor: "pointer", fontFamily: "'Hind Siliguri', sans-serif", display: "inline-flex",
+      alignItems: "center", gap: 5, fontWeight: 600,
+    }}>
+      <Emoji size={13}>⬇️</Emoji> PDF ডাউনলোড
+    </button>
+  );
+}
+
+function RuledRow({ index, children, style }) {
+  const fifth = (index + 1) % 5 === 0;
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 8, padding: "8px 10px 8px 16px",
+      borderBottom: `1px solid ${fifth ? T.margin + "55" : T.rule + "80"}`, fontSize: 14, color: T.ink,
+      position: "relative", ...style,
+    }}>
+      <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: T.margin, opacity: 0.55 }} />
+      {children}
+    </div>
+  );
+}
+
+function PageFrame({ children }) {
+  return (
+    <div style={{
+      background: `repeating-linear-gradient(${T.card}, ${T.card} 33px, ${T.rule}35 34px)`,
+      border: `1px solid ${T.border}`, borderRadius: 4, boxShadow: "0 1px 3px rgba(60,45,20,0.08)", overflow: "hidden",
+    }}>{children}</div>
+  );
+}
+
+function SectionHeader({ title, right }) {
+  return (
+    <div style={{
+      padding: "10px 16px", fontSize: 13, color: T.inkSoft, borderBottom: `1px solid ${T.border}`,
+      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap",
+    }}>
+      <span>{title}</span>{right}
+    </div>
+  );
+}
+
+function EditGate({ isEditor, onRequestUnlock }) {
+  if (isEditor) return null;
+  return (
+    <div style={{
+      padding: "12px 16px", background: T.paperDark, borderBottom: `1px solid ${T.border}`,
+      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap",
+      fontSize: 13, color: T.inkSoft,
+    }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <Emoji size={14}>🔒</Emoji> শুধু দেখার অনুমতি — যোগ/মুছা করতে PIN দিন
+      </span>
+      <button onClick={onRequestUnlock} style={{
+        border: "none", background: T.gold, color: "#fff", borderRadius: 3, padding: "6px 12px",
+        fontSize: 12.5, cursor: "pointer", fontWeight: 600, fontFamily: "'Hind Siliguri', sans-serif",
+      }}>এডিট মোড চালু করুন</button>
+    </div>
+  );
+}
+
+function EmptyNote({ text }) {
+  return <div style={{ padding: "22px 16px", textAlign: "center", color: T.inkSoft, fontSize: 13.5 }}>{text}</div>;
+}
+
+function Metric({ label, value, color, bold }) {
+  return (
+    <div>
+      <div style={{ fontSize: 11.5, color: T.inkSoft }}>{label}</div>
+      <div style={{ fontSize: 14.5, fontWeight: bold ? 700 : 600, color: color || T.ink, fontVariantNumeric: "tabular-nums" }}>{value}</div>
+    </div>
+  );
+}
+
+/* সরল বার চার্ট (recharts ছাড়া) */
+function SimpleBarChart({ data }) {
+  const max = Math.max(1, ...data.map((d) => d.value));
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 24, height: 180, padding: "10px 16px 0" }}>
+      {data.map((d, i) => (
+        <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1 }}>
+          <div style={{ fontSize: 12, marginBottom: 4, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{taka(d.value)}</div>
+          <div style={{ width: "55%", height: Math.max(2, (d.value / max) * 130), background: d.fill, borderRadius: "4px 4px 0 0" }} />
+          <div style={{ fontSize: 12.5, marginTop: 6, color: T.inkSoft }}>{d.name}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   PIN মডাল
+--------------------------------------------------------- */
+function PinModal({ mode, onClose, onSubmit, error }) {
+  const [oldPin, setOldPin] = useState("");
+  const [pin1, setPin1] = useState("");
+  const [pin2, setPin2] = useState("");
+
+  const titles = { setup: "খাতার জন্য একটি PIN সেট করুন", unlock: "এডিট করতে PIN দিন", change: "PIN পরিবর্তন করুন" };
+
+  const submit = () => {
+    if (mode === "unlock") onSubmit({ pin: pin1 });
+    else if (mode === "setup") {
+      if (pin1.length < 4) return onSubmit({ error: "কমপক্ষে ৪ সংখ্যার PIN দিন" });
+      if (pin1 !== pin2) return onSubmit({ error: "দুটি PIN মিলছে না" });
+      onSubmit({ newPin: pin1 });
+    } else if (mode === "change") {
+      if (pin1.length < 4) return onSubmit({ error: "কমপক্ষে ৪ সংখ্যার PIN দিন" });
+      if (pin1 !== pin2) return onSubmit({ error: "দুটি PIN মিলছে না" });
+      onSubmit({ oldPin, newPin: pin1 });
+    }
+  };
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(36,42,38,0.55)", display: "flex",
+      alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16,
+    }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: T.card, borderRadius: 6, padding: 20, width: "100%", maxWidth: 320,
+        fontFamily: "'Hind Siliguri', sans-serif", border: `1px solid ${T.border}`,
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <h3 style={{ margin: 0, fontFamily: "'Tiro Bangla', serif", fontSize: 17, color: T.ink }}>{titles[mode]}</h3>
+          <button onClick={onClose} style={{ border: "none", background: "transparent", cursor: "pointer", color: T.inkSoft }}>
+            <Emoji size={18}>✖️</Emoji>
+          </button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {mode === "change" && (
+            <Field label="বর্তমান PIN">
+              <TextInput type="password" inputMode="numeric" value={oldPin} onChange={(e) => setOldPin(e.target.value)} />
+            </Field>
+          )}
+          {mode === "unlock" ? (
+            <Field label="PIN">
+              <TextInput type="password" inputMode="numeric" autoFocus value={pin1}
+                onChange={(e) => setPin1(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
+            </Field>
+          ) : (
+            <>
+              <Field label="নতুন PIN (কমপক্ষে ৪ সংখ্যা)">
+                <TextInput type="password" inputMode="numeric" value={pin1} onChange={(e) => setPin1(e.target.value)} />
+              </Field>
+              <Field label="নতুন PIN আবার দিন">
+                <TextInput type="password" inputMode="numeric" value={pin2} onChange={(e) => setPin2(e.target.value)} />
+              </Field>
+            </>
+          )}
+          {error && <div style={{ color: T.danger, fontSize: 12.5 }}>{error}</div>}
+          <LedgerButton onClick={submit} color={T.gold} style={{ justifyContent: "center", marginTop: 4 }}>নিশ্চিত করুন</LedgerButton>
+          <p style={{ fontSize: 11, color: T.inkSoft, margin: "4px 0 0", lineHeight: 1.5 }}>
+            লক্ষ্য রাখুন: এই PIN শুধু কারা এডিট করতে পারবে তা আলাদা করার জন্য একটি সহজ ব্যবস্থা — শক্তিশালী নিরাপত্তা ব্যবস্থা নয়। PIN গোপন রাখুন।
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   প্রিন্ট এরিয়া
+--------------------------------------------------------- */
+function PrintTable({ title, columns, rows }) {
+  if (!rows || rows.length === 0) return null;
+  return (
+    <div style={{ marginTop: 8, marginBottom: 14 }}>
+      {title && <div style={{ fontWeight: 600, fontSize: 13, margin: "6px 0 4px" }}>{title}</div>}
+      <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "'Hind Siliguri', sans-serif", fontSize: 12.5 }}>
+        <thead><tr>{columns.map((c) => <th key={c.key} style={{ textAlign: "left", borderBottom: "2px solid #333", padding: "4px 7px" }}>{c.label}</th>)}</tr></thead>
+        <tbody>{rows.map((r, i) => <tr key={i}>{columns.map((c) => <td key={c.key} style={{ borderBottom: "1px solid #ccc", padding: "4px 7px" }}>{r[c.key]}</td>)}</tr>)}</tbody>
+      </table>
+    </div>
+  );
+}
+
+function PrintSummaryGrid({ rows }) {
+  if (!rows || rows.length === 0) return null;
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(140px,1fr))", gap: "4px 18px", margin: "6px 0 10px", fontFamily: "'Hind Siliguri', sans-serif", fontSize: 12.5 }}>
+      {rows.map(([label, value], i) => (
+        <div key={i} style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px dotted #bbb", padding: "2px 0" }}>
+          <span style={{ color: "#555" }}>{label}</span><span style={{ fontWeight: 700, marginLeft: 8 }}>{value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PrintArea({ job }) {
+  if (!job) return null;
+  return (
+    <div className="print-area">
+      <h2 style={{ fontFamily: "'Tiro Bangla', serif", marginBottom: 2 }}>হিসাবের খাতা</h2>
+      {job.title && <h3 style={{ fontFamily: "'Hind Siliguri', sans-serif", fontWeight: 600, marginTop: 0, color: "#444" }}>{job.title}</h3>}
+      {job.sections.map((sec, si) => (
+        <div key={si} style={{ marginBottom: 18, pageBreakInside: "avoid" }}>
+          {sec.heading && <h4 style={{ fontFamily: "'Tiro Bangla', serif", fontSize: 15, borderBottom: "1px solid #999", paddingBottom: 4, marginBottom: 6 }}>{sec.heading}</h4>}
+          <PrintSummaryGrid rows={sec.summaryRows} />
+          {sec.table && <PrintTable title={sec.table.title} columns={sec.table.columns} rows={sec.table.rows} />}
+          {sec.tables && sec.tables.map((t, ti) => <PrintTable key={ti} title={t.title} columns={t.columns} rows={t.rows} />)}
+        </div>
+      ))}
+      <div style={{ marginTop: 10, fontSize: 11, color: "#666" }}>তৈরি হয়েছে: {new Date().toLocaleString("bn-BD")}</div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   প্রধান অ্যাপ
+--------------------------------------------------------- */
+function KhamarHisab() {
+  const [loaded, setLoaded] = useState(false);
+  const [members, setMembers] = useState([]);
+  const [whatsapp, setWhatsapp] = useState([]);
+  const [records, setRecords] = useState({ cow: emptyRecords(), chicken: emptyRecords(), goat: emptyRecords() });
+  const [pin, setPin] = useState(null);
+  const [isEditor, setIsEditor] = useState(false);
+  const [modal, setModal] = useState(null);
+  const [modalError, setModalError] = useState("");
+  const [printJob, setPrintJob] = useState(null);
+  const [tab, setTab] = useState("dashboard");
+  const [subTab, setSubTab] = useState("ledger");
+  const printTimer = useRef(null);
+
+  const fetchAll = useCallback(async () => {
+    const [mRes, wRes, pRes, cowRes, chkRes, goatRes] = await Promise.all([
+      window.storage.get(STORAGE_KEYS.members, true).catch(() => null),
+      window.storage.get(STORAGE_KEYS.whatsapp, true).catch(() => null),
+      window.storage.get(STORAGE_KEYS.pin, true).catch(() => null),
+      window.storage.get(STORAGE_KEYS.cow, true).catch(() => null),
+      window.storage.get(STORAGE_KEYS.chicken, true).catch(() => null),
+      window.storage.get(STORAGE_KEYS.goat, true).catch(() => null),
+    ]);
+    if (mRes && mRes.value) { try { setMembers(JSON.parse(mRes.value)); } catch (e) {} }
+    if (wRes && wRes.value) { try { setWhatsapp(JSON.parse(wRes.value)); } catch (e) {} }
+    setPin(pRes && pRes.value ? pRes.value : "");
+    setRecords({
+      cow: cowRes && cowRes.value ? { ...emptyRecords(), ...JSON.parse(cowRes.value) } : emptyRecords(),
+      chicken: chkRes && chkRes.value ? { ...emptyRecords(), ...JSON.parse(chkRes.value) } : emptyRecords(),
+      goat: goatRes && goatRes.value ? { ...emptyRecords(), ...JSON.parse(goatRes.value) } : emptyRecords(),
+    });
+    return pRes && pRes.value ? pRes.value : "";
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      const serverPin = await fetchAll();
+      let cached = "";
+      try {
+        const c = await window.storage.get("editor-pin-cache", false).catch(() => null);
+        cached = c && c.value ? c.value : "";
+      } catch (e) {}
+      if (serverPin && cached && cached === serverPin) setIsEditor(true);
+      setLoaded(true);
+    })();
+  }, [fetchAll]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    const iv = setInterval(() => { fetchAll(); }, 5000);
+    return () => clearInterval(iv);
+  }, [loaded, fetchAll]);
+
+  useEffect(() => { return () => printTimer.current && clearTimeout(printTimer.current); }, []);
+
+  const saveMembers = useCallback(async (list) => {
+    setMembers(list);
+    try { await window.storage.set(STORAGE_KEYS.members, JSON.stringify(list), true); } catch (e) {}
+  }, []);
+
+  const saveWhatsapp = useCallback(async (list) => {
+    setWhatsapp(list);
+    try { await window.storage.set(STORAGE_KEYS.whatsapp, JSON.stringify(list), true); } catch (e) {}
+  }, []);
+
+  const saveRecordsFor = useCallback(async (farmKey, data) => {
+    setRecords((prev) => ({ ...prev, [farmKey]: data }));
+    try { await window.storage.set(`records-${farmKey}`, JSON.stringify(data), true); } catch (e) {}
+  }, []);
+
+  const openUnlock = () => { setModalError(""); setModal(pin ? "unlock" : "setup"); };
+  const openChangePin = () => { setModalError(""); setModal("change"); };
+  const lockNow = async () => {
+    setIsEditor(false);
+    try { await window.storage.set("editor-pin-cache", "", false); } catch (e) {}
+  };
+  const handleModalSubmit = async (payload) => {
+    if (payload.error) { setModalError(payload.error); return; }
+    if (modal === "unlock") {
+      if (payload.pin === pin) {
+        setIsEditor(true); setModal(null);
+        try { await window.storage.set("editor-pin-cache", payload.pin, false); } catch (e) {}
+      } else { setModalError("ভুল PIN, আবার চেষ্টা করুন"); }
+    } else if (modal === "setup") {
+      setPin(payload.newPin);
+      try {
+        await window.storage.set(STORAGE_KEYS.pin, payload.newPin, true);
+        await window.storage.set("editor-pin-cache", payload.newPin, false);
+      } catch (e) {}
+      setIsEditor(true); setModal(null);
+    } else if (modal === "change") {
+      if (payload.oldPin !== pin) { setModalError("বর্তমান PIN সঠিক নয়"); return; }
+      setPin(payload.newPin);
+      try {
+        await window.storage.set(STORAGE_KEYS.pin, payload.newPin, true);
+        await window.storage.set("editor-pin-cache", payload.newPin, false);
+      } catch (e) {}
+      setModal(null);
+    }
+  };
+
+  const buildFullReportJob = () => {
+    const grand = Object.values(farmTotals).reduce((a, t) => ({
+      capital: a.capital + t.capital, income: a.income + t.income, expense: a.expense + t.expense, profit: a.profit + t.profit,
+    }), { capital: 0, income: 0, expense: 0, profit: 0 });
+
+    const sections = [{
+      heading: "সার্বিক সারসংক্ষেপ",
+      summaryRows: [
+        ["মোট সদস্য", members.length.toString()],
+        ["সর্বমোট সদস্য-মূলধন", taka(grand.capital)],
+        ["সর্বমোট আয়", taka(grand.income)],
+        ["সর্বমোট খরচ", taka(grand.expense)],
+        ["সর্বমোট লাভ/ক্ষতি", taka(grand.profit)],
+      ],
+    }];
+
+    Object.entries(FARMS).forEach(([key, farm]) => {
+      const t = farmTotals[key];
+      const r = records[key];
+      const nameOf = (id) => members.find((m) => m.id === id)?.name || "অজানা সদস্য";
+      const deposits = [...r.deposits].sort((a, b) => (a.date < b.date ? 1 : -1));
+      const expenses = [...r.expenses].sort((a, b) => (a.date < b.date ? 1 : -1));
+      const incomes = [...r.incomes].sort((a, b) => (a.date < b.date ? 1 : -1));
+
+      sections.push({
+        heading: farm.label,
+        summaryRows: [
+          ["মোট জমা", taka(t.deposit)], ["মোট উত্তোলন", taka(t.withdraw)], ["সদস্য-মূলধন (নিট)", taka(t.capital)],
+          ["মোট আয়", taka(t.income)], ["মোট খরচ", taka(t.expense)], ["নিট লাভ/ক্ষতি", taka(t.profit)],
+        ],
+        tables: [
+          deposits.length ? { title: "জমা/উত্তোলন", columns: [{ key: "date", label: "তারিখ" }, { key: "name", label: "সদস্য" }, { key: "type", label: "ধরন" }, { key: "amount", label: "পরিমাণ" }], rows: deposits.map((d) => ({ date: d.date, name: nameOf(d.memberId), type: d.type, amount: taka(d.amount) })) } : null,
+          expenses.length ? { title: "খরচ", columns: [{ key: "date", label: "তারিখ" }, { key: "category", label: "খাত" }, { key: "amount", label: "পরিমাণ" }], rows: expenses.map((e) => ({ date: e.date, category: e.category, amount: taka(e.amount) })) } : null,
+          incomes.length ? { title: "আয়", columns: [{ key: "date", label: "তারিখ" }, { key: "category", label: "খাত" }, { key: "amount", label: "পরিমাণ" }], rows: incomes.map((inc) => ({ date: inc.date, category: inc.category, amount: taka(inc.amount) })) } : null,
+        ].filter(Boolean),
+      });
+    });
+
+    if (members.length > 0) {
+      sections.push({
+        heading: "সদস্য অনুযায়ী মূলধন (সকল খামার)",
+        tables: [{
+          columns: [{ key: "name", label: "নাম" }, { key: "cow", label: "গরু" }, { key: "chicken", label: "মুরগি" }, { key: "goat", label: "ছাগল" }, { key: "total", label: "সর্বমোট" }],
+          rows: members.map((m) => ({ name: m.name, cow: taka(memberCapital(m.id, "cow")), chicken: taka(memberCapital(m.id, "chicken")), goat: taka(memberCapital(m.id, "goat")), total: taka(memberTotalCapital(m.id)) })),
+        }],
+      });
+    }
+    return { title: "সম্পূর্ণ হিসাব রিপোর্ট — সকল খামার", sections };
+  };
+
+  const requestPrint = (job) => {
+    setPrintJob(job);
+    printTimer.current = setTimeout(() => { try { window.print(); } catch (e) {} }, 150);
+  };
+
+  const [memberForm, setMemberForm] = useState({ name: "", phone: "", joinDate: todayStr() });
+  const addMember = () => {
+    if (!isEditor || !memberForm.name.trim()) return;
+    saveMembers([...members, { id: uid(), ...memberForm }]);
+    setMemberForm({ name: "", phone: "", joinDate: todayStr() });
+  };
+  const removeMember = (id) => isEditor && saveMembers(members.filter((m) => m.id !== id));
+
+  const farmTotals = useMemo(() => {
+    const out = {};
+    for (const key of Object.keys(FARMS)) {
+      const r = records[key];
+      const deposit = sum(r.deposits.filter((d) => d.type === "জমা"), (d) => d.amount);
+      const withdraw = sum(r.deposits.filter((d) => d.type === "উত্তোলন"), (d) => d.amount);
+      const expense = sum(r.expenses, (e) => e.amount);
+      const income = sum(r.incomes, (i) => i.amount);
+      out[key] = { deposit, withdraw, capital: deposit - withdraw, expense, income, profit: income - expense };
+    }
+    return out;
+  }, [records]);
+
+  const memberCapital = useCallback((memberId, farmKey) => {
+    const r = records[farmKey];
+    const d = sum(r.deposits.filter((x) => x.memberId === memberId && x.type === "জমা"), (x) => x.amount);
+    const w = sum(r.deposits.filter((x) => x.memberId === memberId && x.type === "উত্তোলন"), (x) => x.amount);
+    return d - w;
+  }, [records]);
+  const memberTotalCapital = useCallback((memberId) => Object.keys(FARMS).reduce((a, k) => a + memberCapital(memberId, k), 0), [memberCapital]);
+
+  if (!loaded) {
+    return <div style={{ padding: 40, textAlign: "center", color: T.inkSoft, fontFamily: "'Hind Siliguri', sans-serif" }}>হিসাবের খাতা খোলা হচ্ছে…</div>;
+  }
+
+  return (
+    <div style={{ fontFamily: "'Hind Siliguri', sans-serif", background: T.paper, minHeight: "100%", color: T.ink }}>
+      <style>{`
+        .print-area { display: none; }
+        @media print {
+          .app-normal { display: none !important; }
+          .print-area { display: block !important; padding: 10px; }
+        }
+      `}</style>
+
+      <div className="app-normal">
+        <div style={{ padding: "18px 18px 14px", background: T.paperDark, borderBottom: `2px solid ${T.margin}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
+          <div>
+            <h1 style={{ margin: 0, fontFamily: "'Tiro Bangla', serif", fontSize: 24, color: T.ink }}>হিসাবের খাতা</h1>
+            <p style={{ margin: "4px 0 0", fontSize: 13, color: T.inkSoft }}>সমবায় খামার ব্যবস্থাপনা — গরু · মুরগি · ছাগল</p>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {isEditor ? (
+              <>
+                <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: T.goat, fontWeight: 600, background: T.goat + "1a", padding: "5px 9px", borderRadius: 3 }}>
+                  <Emoji size={13}>🔓</Emoji> এডিট মোড
+                </span>
+                <button onClick={openChangePin} title="PIN পরিবর্তন" style={{ border: "none", background: "transparent", color: T.inkSoft, cursor: "pointer", fontSize: 12 }}>PIN বদলান</button>
+                <button onClick={lockNow} style={{ border: `1px solid ${T.border}`, background: "transparent", color: T.inkSoft, borderRadius: 3, padding: "5px 9px", fontSize: 12, cursor: "pointer" }}>লক করুন</button>
+              </>
+            ) : (
+              <button onClick={openUnlock} style={{ display: "flex", alignItems: "center", gap: 5, border: `1px solid ${T.gold}`, background: "transparent", color: T.gold, borderRadius: 3, padding: "6px 10px", fontSize: 12.5, cursor: "pointer", fontWeight: 600 }}>
+                <Emoji size={13}>🔒</Emoji> শুধু দেখা — এডিট মোড
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 4, padding: "10px 12px 0", overflowX: "auto" }}>
+          {[
+            { key: "dashboard", label: "ড্যাশবোর্ড", color: T.neutral, icon: "🏠" },
+            { key: "cow", label: FARMS.cow.label, color: T.cow, icon: "🐾" },
+            { key: "chicken", label: FARMS.chicken.label, color: T.chicken, icon: "🥚" },
+            { key: "goat", label: FARMS.goat.label, color: T.goat, icon: "🐾" },
+            { key: "whatsapp", label: "WhatsApp নাম্বার", color: T.whatsapp, icon: "💬" },
+            { key: "members", label: "সদস্যগণ", color: T.gold, icon: "👥" },
+          ].map(({ key, label, color, icon }) => {
+            const active = tab === key;
+            return (
+              <button key={key} onClick={() => { setTab(key); setSubTab("ledger"); }} style={{
+                flex: "0 0 auto", display: "flex", alignItems: "center", gap: 6, padding: "9px 14px",
+                fontSize: 13.5, fontWeight: 600, border: "none", borderRadius: "6px 6px 0 0", cursor: "pointer",
+                background: active ? T.card : "transparent", color: active ? color : T.inkSoft,
+                boxShadow: active ? `inset 0 -3px 0 ${color}` : "none", fontFamily: "'Hind Siliguri', sans-serif",
+              }}>
+                <Emoji size={15}>{icon}</Emoji>{label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ padding: 14 }}>
+          {tab === "dashboard" && <Dashboard totals={farmTotals} memberCount={members.length} onDownloadFull={() => requestPrint(buildFullReportJob())} />}
+          {["cow", "chicken", "goat"].includes(tab) && (
+            <FarmPage farmKey={tab} farm={FARMS[tab]} totals={farmTotals[tab]} records={records[tab]} members={members}
+              subTab={subTab} setSubTab={setSubTab} saveRecords={(d) => saveRecordsFor(tab, d)} memberCapital={memberCapital}
+              isEditor={isEditor} onRequestUnlock={openUnlock} requestPrint={requestPrint} />
+          )}
+          {tab === "whatsapp" && <WhatsAppTab items={whatsapp} onSave={saveWhatsapp} isEditor={isEditor} onRequestUnlock={openUnlock} requestPrint={requestPrint} />}
+          {tab === "members" && (
+            <MembersPage members={members} memberForm={memberForm} setMemberForm={setMemberForm} addMember={addMember}
+              removeMember={removeMember} memberTotalCapital={memberTotalCapital} memberCapital={memberCapital}
+              isEditor={isEditor} onRequestUnlock={openUnlock} requestPrint={requestPrint} />
+          )}
+        </div>
+
+        <p style={{ textAlign: "center", fontSize: 11.5, color: T.inkSoft, padding: "6px 10px 16px" }}>
+          এই খাতার তথ্য সবাই দেখতে পাবে; এডিট (যোগ/মুছা) করতে PIN প্রয়োজন। এডিট করলে প্রায় ৫ সেকেন্ডের মধ্যে সবার পাতায় হালনাগাদ হয়ে যাবে।
+        </p>
+      </div>
+
+      <PrintArea job={printJob} />
+      {modal && <PinModal mode={modal} error={modalError} onClose={() => setModal(null)} onSubmit={handleModalSubmit} />}
+    </div>
+  );
+}
+
+function Dashboard({ totals, memberCount, onDownloadFull }) {
+  const grand = Object.values(totals).reduce((a, t) => ({
+    capital: a.capital + t.capital, income: a.income + t.income, expense: a.expense + t.expense, profit: a.profit + t.profit,
+  }), { capital: 0, income: 0, expense: 0, profit: 0 });
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <PageFrame>
+        <SectionHeader title="সব খামার একসাথে" right={<PdfButton onClick={onDownloadFull} color={T.neutral} />} />
+        <div style={{ padding: "14px 16px 14px 20px", display: "flex", flexWrap: "wrap", gap: 18 }}>
+          <SummaryStat label="মোট সদস্য" value={memberCount.toString()} color={T.gold} icon="👥" />
+          <SummaryStat label="সর্বমোট সদস্য-মূলধন" value={taka(grand.capital)} color={T.neutral} icon="👛" />
+          <SummaryStat label="সর্বমোট লাভ/ক্ষতি" value={taka(grand.profit)} color={grand.profit >= 0 ? T.goat : T.danger} icon={grand.profit >= 0 ? "📈" : "📉"} />
+        </div>
+        <div style={{ padding: "0 16px 14px", fontSize: 12, color: T.inkSoft }}>
+          "PDF ডাউনলোড" বাটনে চাপলে গরু, মুরগি ও ছাগল — তিনটি খামারের সম্পূর্ণ হিসাব (জমা/উত্তোলন, খরচ, আয়, সদস্য-মূলধন) এক PDF-এ পাবেন।
+        </div>
+      </PageFrame>
+
+      {Object.entries(FARMS).map(([key, farm]) => {
+        const t = totals[key];
+        return (
+          <PageFrame key={key}>
+            <div style={{ display: "flex" }}>
+              <div style={{ width: 6, background: farm.color }} />
+              <div style={{ flex: 1, padding: "12px 14px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <Emoji size={17}>{farm.icon}</Emoji>
+                  <span style={{ fontFamily: "'Tiro Bangla', serif", fontSize: 16.5 }}>{farm.label}</span>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 16, fontSize: 13.5 }}>
+                  <Metric label="সদস্য-মূলধন" value={taka(t.capital)} />
+                  <Metric label="মোট আয়" value={taka(t.income)} />
+                  <Metric label="মোট খরচ" value={taka(t.expense)} />
+                  <Metric label="নিট লাভ/ক্ষতি" value={taka(t.profit)} color={t.profit >= 0 ? T.goat : T.danger} bold />
+                </div>
+              </div>
+            </div>
+          </PageFrame>
+        );
+      })}
+    </div>
+  );
+}
+
+function SummaryStat({ label, value, color, icon }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "1 1 150px" }}>
+      <div style={{ width: 34, height: 34, borderRadius: "50%", background: color + "1c", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Emoji size={17}>{icon}</Emoji>
+      </div>
+      <div>
+        <div style={{ fontSize: 11.5, color: T.inkSoft }}>{label}</div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: T.ink, fontVariantNumeric: "tabular-nums" }}>{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function FarmPage({ farmKey, farm, totals, records, members, subTab, setSubTab, saveRecords, memberCapital, isEditor, onRequestUnlock, requestPrint }) {
+  const subTabs = [
+    { key: "ledger", label: "জমা/উত্তোলন" }, { key: "expense", label: "খরচ" },
+    { key: "income", label: "আয়" }, { key: "report", label: "রিপোর্ট" },
+  ];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", gap: 4, borderBottom: `1px solid ${T.border}`, overflowX: "auto" }}>
+        {subTabs.map((s) => (
+          <button key={s.key} onClick={() => setSubTab(s.key)} style={{
+            border: "none", background: "transparent", padding: "8px 12px", fontSize: 13.5, fontWeight: 600,
+            cursor: "pointer", color: subTab === s.key ? farm.color : T.inkSoft,
+            borderBottom: subTab === s.key ? `2.5px solid ${farm.color}` : "2.5px solid transparent",
+            fontFamily: "'Hind Siliguri', sans-serif", whiteSpace: "nowrap",
+          }}>{s.label}</button>
+        ))}
+      </div>
+      {subTab === "ledger" && <LedgerTab farm={farm} farmKey={farmKey} records={records} members={members} saveRecords={saveRecords} memberCapital={memberCapital} isEditor={isEditor} onRequestUnlock={onRequestUnlock} requestPrint={requestPrint} />}
+      {subTab === "expense" && <MoneyTab type="expense" farm={farm} items={records.expenses} categories={farm.expenseCats} onSave={(items) => saveRecords({ ...records, expenses: items })} isEditor={isEditor} onRequestUnlock={onRequestUnlock} requestPrint={requestPrint} />}
+      {subTab === "income" && <MoneyTab type="income" farm={farm} items={records.incomes} categories={farm.incomeCats} onSave={(items) => saveRecords({ ...records, incomes: items })} isEditor={isEditor} onRequestUnlock={onRequestUnlock} requestPrint={requestPrint} />}
+      {subTab === "report" && <ReportTab farm={farm} farmKey={farmKey} totals={totals} records={records} members={members} memberCapital={memberCapital} requestPrint={requestPrint} />}
+    </div>
+  );
+}
+
+function LedgerTab({ farm, farmKey, records, members, saveRecords, memberCapital, isEditor, onRequestUnlock, requestPrint }) {
+  const [form, setForm] = useState({ memberId: members[0]?.id || "", type: "জমা", amount: "", date: todayStr(), note: "" });
+  useEffect(() => { if (!form.memberId && members[0]) setForm((f) => ({ ...f, memberId: members[0].id })); }, [members]);
+
+  const add = () => {
+    if (!isEditor || !form.memberId || !form.amount) return;
+    const entry = { id: uid(), ...form, amount: Number(form.amount) };
+    saveRecords({ ...records, deposits: [entry, ...records.deposits] });
+    setForm({ ...form, amount: "", note: "" });
+  };
+  const remove = (id) => isEditor && saveRecords({ ...records, deposits: records.deposits.filter((d) => d.id !== id) });
+  const clearAll = () => isEditor && saveRecords({ ...records, deposits: [] });
+  const nameOf = (id) => members.find((m) => m.id === id)?.name || "অজানা সদস্য";
+  const sorted = [...records.deposits].sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  const printAll = () => requestPrint({
+    title: `${farm.label} — জমা/উত্তোলনের হিসাব`,
+    sections: [{ table: { columns: [{ key: "date", label: "তারিখ" }, { key: "name", label: "সদস্য" }, { key: "type", label: "ধরন" }, { key: "amount", label: "পরিমাণ" }, { key: "note", label: "নোট" }], rows: sorted.map((d) => ({ date: d.date, name: nameOf(d.memberId), type: d.type, amount: taka(d.amount), note: d.note || "" })) } }],
+  });
+
+  if (members.length === 0) return <EmptyNote text="প্রথমে “সদস্যগণ” ট্যাব থেকে সদস্য যোগ করুন।" />;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <PageFrame>
+        <EditGate isEditor={isEditor} onRequestUnlock={onRequestUnlock} />
+        {isEditor && (
+          <div style={{ padding: 14, display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
+            <Field label="সদস্য"><SelectInput value={form.memberId} onChange={(e) => setForm({ ...form, memberId: e.target.value })}>{members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</SelectInput></Field>
+            <Field label="ধরন"><SelectInput value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}><option value="জমা">জমা</option><option value="উত্তোলন">উত্তোলন</option></SelectInput></Field>
+            <Field label="পরিমাণ (৳)"><TextInput type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="০" /></Field>
+            <Field label="তারিখ"><TextInput type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
+            <Field label="নোট (ঐচ্ছিক)"><TextInput value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="মন্তব্য" /></Field>
+            <LedgerButton onClick={add} color={farm.color}><Emoji size={15}>➕</Emoji> যোগ করুন</LedgerButton>
+          </div>
+        )}
+      </PageFrame>
+      <PageFrame>
+        <SectionHeader title="জমা/উত্তোলনের তালিকা" right={<div style={{ display: "flex", gap: 8 }}><PdfButton onClick={printAll} color={farm.color} />{isEditor && sorted.length > 0 && <TwoStepBulk onConfirm={clearAll} />}</div>} />
+        {sorted.length === 0 ? <EmptyNote text="এখনও কোনো জমা/উত্তোলন যোগ করা হয়নি।" /> : sorted.map((d, i) => (
+          <RuledRow key={d.id} index={i}>
+            <span style={{ width: 84, color: T.inkSoft, fontSize: 12.5 }}>{d.date}</span>
+            <span style={{ flex: 1 }}>{nameOf(d.memberId)}{d.note ? <span style={{ color: T.inkSoft }}> — {d.note}</span> : null}</span>
+            <span style={{ fontWeight: 700, color: d.type === "জমা" ? T.goat : T.danger, fontVariantNumeric: "tabular-nums" }}>{d.type === "জমা" ? "+" : "−"}{taka(d.amount)}</span>
+            {isEditor && <TwoStepDelete onConfirm={() => remove(d.id)} />}
+          </RuledRow>
+        ))}
+      </PageFrame>
+      <PageFrame>
+        <SectionHeader title={`সদস্য অনুযায়ী মূলধন — ${farm.label}`} />
+        {members.map((m, i) => (
+          <RuledRow key={m.id} index={i}>
+            <span style={{ flex: 1 }}>{m.name}</span>
+            <span style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{taka(memberCapital(m.id, farmKey))}</span>
+          </RuledRow>
+        ))}
+      </PageFrame>
+    </div>
+  );
+}
+
+function MoneyTab({ type, farm, items, categories, onSave, isEditor, onRequestUnlock, requestPrint }) {
+  const isExpense = type === "expense";
+  const [form, setForm] = useState({ category: categories[0], amount: "", date: todayStr(), note: "" });
+  const add = () => {
+    if (!isEditor || !form.amount) return;
+    const entry = { id: uid(), ...form, amount: Number(form.amount) };
+    onSave([entry, ...items]);
+    setForm({ ...form, amount: "", note: "" });
+  };
+  const remove = (id) => isEditor && onSave(items.filter((it) => it.id !== id));
+  const clearAll = () => isEditor && onSave([]);
+  const sorted = [...items].sort((a, b) => (a.date < b.date ? 1 : -1));
+  const total = sum(items, (it) => it.amount);
+
+  const printAll = () => requestPrint({
+    title: `${farm.label} — ${isExpense ? "খরচের হিসাব" : "আয়ের হিসাব"}`,
+    sections: [{ table: { columns: [{ key: "date", label: "তারিখ" }, { key: "category", label: "খাত" }, { key: "amount", label: "পরিমাণ" }, { key: "note", label: "নোট" }], rows: sorted.map((it) => ({ date: it.date, category: it.category, amount: taka(it.amount), note: it.note || "" })) } }],
+  });
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <PageFrame>
+        <EditGate isEditor={isEditor} onRequestUnlock={onRequestUnlock} />
+        {isEditor && (
+          <div style={{ padding: 14, display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
+            <Field label="খাত"><SelectInput value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>{categories.map((c) => <option key={c} value={c}>{c}</option>)}</SelectInput></Field>
+            <Field label="পরিমাণ (৳)"><TextInput type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="০" /></Field>
+            <Field label="তারিখ"><TextInput type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
+            <Field label="নোট (ঐচ্ছিক)"><TextInput value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="মন্তব্য" /></Field>
+            <LedgerButton onClick={add} color={isExpense ? T.danger : farm.color}><Emoji size={15}>➕</Emoji> যোগ করুন</LedgerButton>
+          </div>
+        )}
+      </PageFrame>
+      <PageFrame>
+        <SectionHeader title={isExpense ? "খরচের তালিকা" : "আয়ের তালিকা"} right={<div style={{ display: "flex", gap: 8 }}><PdfButton onClick={printAll} color={isExpense ? T.danger : farm.color} />{isEditor && sorted.length > 0 && <TwoStepBulk onConfirm={clearAll} />}</div>} />
+        {sorted.length === 0 ? <EmptyNote text={isExpense ? "এখনও কোনো খরচ যোগ করা হয়নি।" : "এখনও কোনো আয় যোগ করা হয়নি।"} /> : (
+          <>
+            {sorted.map((it, i) => (
+              <RuledRow key={it.id} index={i}>
+                <span style={{ width: 84, color: T.inkSoft, fontSize: 12.5 }}>{it.date}</span>
+                <span style={{ flex: 1 }}>{it.category}{it.note ? <span style={{ color: T.inkSoft }}> — {it.note}</span> : null}</span>
+                <span style={{ fontWeight: 700, color: isExpense ? T.danger : T.goat, fontVariantNumeric: "tabular-nums" }}>{taka(it.amount)}</span>
+                {isEditor && <TwoStepDelete onConfirm={() => remove(it.id)} />}
+              </RuledRow>
+            ))}
+            <div style={{ display: "flex", padding: "10px 16px", fontWeight: 700, fontSize: 14 }}><span style={{ flex: 1 }}>মোট</span><span style={{ fontVariantNumeric: "tabular-nums" }}>{taka(total)}</span></div>
+          </>
+        )}
+      </PageFrame>
+    </div>
+  );
+}
+
+function ReportTab({ farm, farmKey, totals, records, members, memberCapital, requestPrint }) {
+  const chartData = [{ name: "আয়", value: totals.income, fill: farm.color }, { name: "খরচ", value: totals.expense, fill: T.danger }];
+  const nameOf = (id) => members.find((m) => m.id === id)?.name || "অজানা সদস্য";
+
+  const printReport = () => {
+    const deposits = [...records.deposits].sort((a, b) => (a.date < b.date ? 1 : -1));
+    const expenses = [...records.expenses].sort((a, b) => (a.date < b.date ? 1 : -1));
+    const incomes = [...records.incomes].sort((a, b) => (a.date < b.date ? 1 : -1));
+    requestPrint({
+      title: `${farm.label} — লাভ-ক্ষতির রিপোর্ট`,
+      sections: [
+        { summaryRows: [["মোট জমা", taka(totals.deposit)], ["মোট উত্তোলন", taka(totals.withdraw)], ["সদস্য-মূলধন (নিট)", taka(totals.capital)], ["মোট আয়", taka(totals.income)], ["মোট খরচ", taka(totals.expense)], ["নিট লাভ/ক্ষতি", taka(totals.profit)]] },
+        { heading: "সদস্য অনুযায়ী মূলধন", tables: members.length ? [{ columns: [{ key: "name", label: "নাম" }, { key: "capital", label: "মূলধন" }], rows: members.map((m) => ({ name: m.name, capital: taka(memberCapital(m.id, farmKey)) })) }] : [] },
+        { heading: "বিস্তারিত হিসাব", tables: [
+          deposits.length ? { title: "জমা/উত্তোলন", columns: [{ key: "date", label: "তারিখ" }, { key: "name", label: "সদস্য" }, { key: "type", label: "ধরন" }, { key: "amount", label: "পরিমাণ" }], rows: deposits.map((d) => ({ date: d.date, name: nameOf(d.memberId), type: d.type, amount: taka(d.amount) })) } : null,
+          expenses.length ? { title: "খরচ", columns: [{ key: "date", label: "তারিখ" }, { key: "category", label: "খাত" }, { key: "amount", label: "পরিমাণ" }], rows: expenses.map((e) => ({ date: e.date, category: e.category, amount: taka(e.amount) })) } : null,
+          incomes.length ? { title: "আয়", columns: [{ key: "date", label: "তারিখ" }, { key: "category", label: "খাত" }, { key: "amount", label: "পরিমাণ" }], rows: incomes.map((inc) => ({ date: inc.date, category: inc.category, amount: taka(inc.amount) })) } : null,
+        ].filter(Boolean) },
+      ],
+    });
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <PageFrame>
+        <SectionHeader title={`${farm.label} — রিপোর্ট`} right={<PdfButton onClick={printReport} color={farm.color} />} />
+        <div style={{ padding: 16, display: "flex", flexWrap: "wrap", gap: 20 }}>
+          <Metric label="মোট জমা" value={taka(totals.deposit)} />
+          <Metric label="মোট উত্তোলন" value={taka(totals.withdraw)} />
+          <Metric label="সদস্য-মূলধন (নিট)" value={taka(totals.capital)} bold />
+          <Metric label="মোট আয়" value={taka(totals.income)} />
+          <Metric label="মোট খরচ" value={taka(totals.expense)} />
+          <Metric label="নিট লাভ/ক্ষতি" value={taka(totals.profit)} color={totals.profit >= 0 ? T.goat : T.danger} bold />
+        </div>
+      </PageFrame>
+      <PageFrame>
+        <SectionHeader title="আয় বনাম খরচ" />
+        <SimpleBarChart data={chartData} />
+      </PageFrame>
+      <PageFrame>
+        <SectionHeader title={`সদস্য অনুযায়ী মূলধন — ${farm.label}`} />
+        {members.length === 0 ? <EmptyNote text="কোনো সদস্য নেই।" /> : members.map((m, i) => (
+          <RuledRow key={m.id} index={i}><span style={{ flex: 1 }}>{m.name}</span><span style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{taka(memberCapital(m.id, farmKey))}</span></RuledRow>
+        ))}
+      </PageFrame>
+    </div>
+  );
+}
+
+function WhatsAppTab({ items, onSave, isEditor, onRequestUnlock, requestPrint }) {
+  const [form, setForm] = useState({ name: "", number: "", note: "" });
+  const add = () => {
+    if (!isEditor || !form.name.trim() || !form.number.trim()) return;
+    onSave([{ id: uid(), ...form }, ...items]);
+    setForm({ name: "", number: "", note: "" });
+  };
+  const remove = (id) => isEditor && onSave(items.filter((it) => it.id !== id));
+  const clearAll = () => isEditor && onSave([]);
+  const printAll = () => requestPrint({
+    title: "WhatsApp নাম্বারের তালিকা",
+    sections: [{ table: { columns: [{ key: "name", label: "নাম" }, { key: "number", label: "WhatsApp নাম্বার" }, { key: "note", label: "নোট" }], rows: items.map((it) => ({ name: it.name, number: it.number, note: it.note || "" })) } }],
+  });
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <PageFrame>
+        <EditGate isEditor={isEditor} onRequestUnlock={onRequestUnlock} />
+        {isEditor && (
+          <div style={{ padding: 14, display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
+            <Field label="নাম"><TextInput value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="নাম" /></Field>
+            <Field label="WhatsApp নাম্বার"><TextInput value={form.number} onChange={(e) => setForm({ ...form, number: e.target.value })} placeholder="+৮৮০১XXXXXXXXX" /></Field>
+            <Field label="নোট (ঐচ্ছিক)"><TextInput value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="যেমন: সভাপতি" /></Field>
+            <LedgerButton onClick={add} color={T.whatsapp}><Emoji size={15}>➕</Emoji> যোগ করুন</LedgerButton>
+          </div>
+        )}
+      </PageFrame>
+      <PageFrame>
+        <SectionHeader title="WhatsApp নাম্বার তালিকা" right={<div style={{ display: "flex", gap: 8 }}><PdfButton onClick={printAll} color={T.whatsapp} />{isEditor && items.length > 0 && <TwoStepBulk onConfirm={clearAll} />}</div>} />
+        {items.length === 0 ? <EmptyNote text="এখনও কোনো নাম্বার যোগ করা হয়নি।" /> : items.map((it, i) => (
+          <RuledRow key={it.id} index={i}>
+            <Emoji size={15}>💬</Emoji>
+            <span style={{ flex: 1 }}>{it.name}{it.note ? <span style={{ color: T.inkSoft }}> — {it.note}</span> : null}</span>
+            <span style={{ fontVariantNumeric: "tabular-nums", color: T.inkSoft }}>{it.number}</span>
+            {isEditor && <TwoStepDelete onConfirm={() => remove(it.id)} />}
+          </RuledRow>
+        ))}
+      </PageFrame>
+    </div>
+  );
+}
+
+function MembersPage({ members, memberForm, setMemberForm, addMember, removeMember, memberTotalCapital, memberCapital, isEditor, onRequestUnlock, requestPrint }) {
+  const printAll = () => requestPrint({
+    title: "সদস্যদের তালিকা",
+    sections: [{ table: { columns: [{ key: "name", label: "নাম" }, { key: "phone", label: "মোবাইল" }, { key: "joinDate", label: "যোগদান" }, { key: "capital", label: "সর্বমোট মূলধন" }], rows: members.map((m) => ({ name: m.name, phone: m.phone || "-", joinDate: m.joinDate, capital: taka(memberTotalCapital(m.id)) })) } }],
+  });
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <PageFrame>
+        <EditGate isEditor={isEditor} onRequestUnlock={onRequestUnlock} />
+        {isEditor && (
+          <div style={{ padding: 14, display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
+            <Field label="নাম"><TextInput value={memberForm.name} onChange={(e) => setMemberForm({ ...memberForm, name: e.target.value })} placeholder="সদস্যের নাম" /></Field>
+            <Field label="মোবাইল নম্বর"><TextInput value={memberForm.phone} onChange={(e) => setMemberForm({ ...memberForm, phone: e.target.value })} placeholder="০১XXXXXXXXX" /></Field>
+            <Field label="যোগদানের তারিখ"><TextInput type="date" value={memberForm.joinDate} onChange={(e) => setMemberForm({ ...memberForm, joinDate: e.target.value })} /></Field>
+            <LedgerButton onClick={addMember} color={T.gold}><Emoji size={15}>➕</Emoji> সদস্য যোগ করুন</LedgerButton>
+          </div>
+        )}
+      </PageFrame>
+      <PageFrame>
+        <SectionHeader title="সদস্যদের তালিকা" right={<PdfButton onClick={printAll} color={T.gold} />} />
+        {members.length === 0 ? <EmptyNote text="এখনও কোনো সদস্য যোগ করা হয়নি।" /> : members.map((m, i) => (
+          <RuledRow key={m.id} index={i} style={{ flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 140px" }}>
+              <div style={{ fontWeight: 600 }}>{m.name}</div>
+              <div style={{ fontSize: 12, color: T.inkSoft, display: "flex", alignItems: "center", gap: 4 }}>
+                {m.phone ? <><Emoji size={11}>📞</Emoji> {m.phone}</> : "—"}
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: T.inkSoft, width: 100 }}>যোগদান: {m.joinDate}</div>
+            <div style={{ textAlign: "right", width: 110 }}>
+              <div style={{ fontSize: 11, color: T.inkSoft }}>সর্বমোট মূলধন</div>
+              <div style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{taka(memberTotalCapital(m.id))}</div>
+            </div>
+            {isEditor && <TwoStepDelete onConfirm={() => removeMember(m.id)} />}
+          </RuledRow>
+        ))}
+      </PageFrame>
+      {members.length > 0 && (
+        <PageFrame>
+          <SectionHeader title="খামারভিত্তিক মূলধনের বিস্তারিত" />
+          {members.map((m, i) => (
+            <RuledRow key={m.id} index={i}>
+              <span style={{ flex: 1 }}>{m.name}</span>
+              {Object.entries(FARMS).map(([k, f]) => <span key={k} style={{ fontSize: 12, color: f.color, width: 78, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{taka(memberCapital(m.id, k))}</span>)}
+            </RuledRow>
+          ))}
+          <div style={{ display: "flex", padding: "6px 16px 12px", fontSize: 11, color: T.inkSoft }}>
+            <span style={{ flex: 1 }}></span>
+            {Object.values(FARMS).map((f, i) => <span key={i} style={{ width: 78, textAlign: "right" }}>{f.label.split(" ")[0]}</span>)}
+          </div>
+        </PageFrame>
+      )}
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<KhamarHisab />);
+</script>
+</body>
+</html>
