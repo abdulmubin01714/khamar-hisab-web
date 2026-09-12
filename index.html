@@ -1,0 +1,813 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>বন্ধু মহল এগ্রো ফার্ম</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Tiro+Bangla&family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --paper:#F6F1E4; --surface:#FFFDF8; --ink:#232420; --line:#DCD3B8;
+    --forest:#1F4D3D; --forest-dark:#163A2E;
+    --cow:#A9642F; --chicken:#B9860F; --goat:#9C4A3C; --danger:#B23A3A;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Hind Siliguri',sans-serif;}
+  h1,h2,.serif{font-family:'Tiro Bangla',serif;}
+  .tnum{font-variant-numeric:tabular-nums;}
+  input,select,textarea{
+    width:100%;border:1px solid var(--line);border-radius:6px;padding:8px 10px;
+    font-family:inherit;font-size:14px;background:#fff;color:var(--ink);
+  }
+  button{cursor:pointer;font-family:inherit;border:none;border-radius:6px;font-size:14px;}
+  .btn-primary{background:var(--forest);color:var(--paper);padding:10px 16px;font-weight:600;}
+  .btn-primary:hover{background:var(--forest-dark);}
+  .btn-secondary{background:transparent;border:1px solid var(--line);color:var(--ink);padding:10px 16px;font-weight:500;}
+  .btn-secondary:hover{background:var(--paper);}
+  .btn-danger{background:none;color:var(--danger);font-size:12px;text-decoration:underline;padding:0;}
+  .btn-link{background:none;color:var(--forest);font-size:13px;text-decoration:underline;padding:0;}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;}
+  .chip{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;font-weight:500;}
+  .chip-credit{background:#1F4D3D1a;color:var(--forest);}
+  .chip-debit{background:#B23A3A1a;color:var(--danger);}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{padding:7px 4px;text-align:right;border-bottom:1px solid var(--line);}
+  th{color:#5b5b52;font-weight:500;font-size:12px;}
+  a{color:var(--forest);}
+  #loading{min-height:100vh;display:flex;align-items:center;justify-content:center;color:var(--forest);}
+  .field{display:block;margin-bottom:14px;}
+  .field span{font-size:12px;color:#5b5b52;display:block;margin-bottom:4px;}
+  #appShell{display:none;min-height:100vh;}
+  .topbar{background:var(--forest);color:var(--paper);padding:12px 16px;display:flex;justify-content:space-between;align-items:center;}
+  .nav{display:flex;background:var(--surface);border-bottom:1px solid var(--line);overflow-x:auto;}
+  .nav button{background:none;padding:10px 14px;font-size:13px;color:#5b5b5288;white-space:nowrap;border-bottom:2px solid transparent;}
+  .nav button.active{color:var(--forest);border-bottom-color:var(--forest);font-weight:600;}
+  main{max-width:720px;margin:0 auto;padding:16px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;}
+  .stat .label{font-size:11px;color:#5b5b52;}
+  .stat .value{font-size:20px;font-weight:700;margin-top:2px;}
+  .modal-bg{position:fixed;inset:0;background:#23242066;display:flex;align-items:flex-end;justify-content:center;z-index:30;}
+  .modal{background:var(--surface);width:100%;max-width:420px;border-radius:16px 16px 0 0;padding:20px;max-height:88vh;overflow-y:auto;}
+  @media(min-width:640px){.modal-bg{align-items:center;} .modal{border-radius:12px;}}
+  .rowbtn{display:flex;gap:10px;margin-top:6px;}
+  .rowbtn button{flex:1;padding:10px;}
+  .list-item{border-bottom:1px solid #efe9d8;padding:10px 0;}
+  .list-item:last-child{border-bottom:none;}
+  .between{display:flex;justify-content:space-between;align-items:center;}
+  .topbar-btn{background:none;color:var(--paper);text-decoration:underline;font-size:12px;}
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div style="text-align:center;padding:0 24px;">
+    <div id="loadingText">লোড হচ্ছে…</div>
+    <div id="loadingHelp" style="display:none;font-size:13px;color:#c9c3ae;margin-top:14px;line-height:1.7;max-width:320px;">
+      অনেকক্ষণ ধরে লোড হচ্ছে। সম্ভাব্য কারণ:<br>
+      ১) ফাইলটা সরাসরি (file://) খোলা হয়েছে — এক্ষেত্রে GitHub Pages বা অন্য কোনো https:// ঠিকানা থেকে খুলুন।<br>
+      ২) index.html-এর ভেতরের firebaseConfig-এ আসল মান বসানো হয়নি।<br>
+      ৩) ইন্টারনেট সংযোগ ধীর বা বন্ধ।
+    </div>
+  </div>
+</div>
+
+<div id="loginScreen" style="display:none;">
+  <form class="login-box" id="loginForm">
+    <div style="text-align:center;margin-bottom:16px;">
+      <div class="serif" style="font-size:24px;font-weight:700;color:var(--forest);">বন্ধু মহল এগ্রো ফার্ম</div>
+      <div style="font-size:12px;color:#5b5b52;margin-top:2px;">গরু · মুরগি · ছাগল · মাছ হিসাব ব্যবস্থাপনা</div>
+    </div>
+    <label class="field"><span>ইমেইল</span><input type="email" id="loginEmail" required placeholder="staff@example.com" /></label>
+    <label class="field"><span>পাসওয়ার্ড</span><input type="password" id="loginPassword" required placeholder="••••••••" /></label>
+    <div id="loginError" style="color:var(--danger);font-size:13px;margin-bottom:10px;"></div>
+    <button type="submit" class="btn-primary" style="width:100%;">প্রবেশ করুন</button>
+    <p style="font-size:11px;color:#8a8a80;text-align:center;margin-top:14px;">নতুন স্টাফ অ্যাকাউন্ট Firebase Console থেকে তৈরি করে দেবেন।</p>
+  </form>
+</div>
+
+<div id="appShell" style="display:none;">
+  <div class="topbar">
+    <div class="serif" style="font-size:18px;font-weight:700;">বন্ধু মহল এগ্রো ফার্ম</div>
+    <div style="display:flex;align-items:center;gap:14px;">
+      <button id="authToggleBtn" class="topbar-btn"></button>
+      <button id="signOutBtn" class="topbar-btn">প্রস্থান</button>
+    </div>
+  </div>
+  <div class="nav" id="navBar">
+    <button data-route="dashboard">ড্যাশবোর্ড</button>
+    <button data-route="members">সদস্য</button>
+    <button data-route="folders">ফোল্ডার</button>
+    <button data-route="transactions">লেনদেন</button>
+  </div>
+  <main id="mainContent"></main>
+</div>
+
+<div id="modalRoot"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import {
+  getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDoc, getDocs,
+  query, where, orderBy, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+/* ======================================================================
+   ১) এখানে আপনার Firebase Console > Project settings > General থেকে
+   পাওয়া কনফিগ বসান।
+====================================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyATKDBR5EXYUJ4UNxC7ptXAEtGDYaChX9Y",
+  authDomain: "khamar-hisab-24646.firebaseapp.com",
+  projectId: "khamar-hisab-24646",
+  storageBucket: "khamar-hisab-24646.firebasestorage.app",
+  messagingSenderId: "623677985715",
+  appId: "1:623677985715:web:01dfc2619707c547e571c6",
+};
+
+/* ======================================================================
+   ২) কমিটির গোপন কোড। শুধু এই কোড জানা মানুষই এডিট করতে পারবে।
+   এটা বদলাতে চাইলে এখানে নতুন সংখ্যা বসিয়ে ফাইলটা আবার আপলোড করুন।
+====================================================================== */
+const COMMITTEE_PIN = "123456";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+const TX_TYPES = [
+  { value: 'deposit', label: 'জমা' },
+  { value: 'expense', label: 'খরচ' },
+  { value: 'income', label: 'আয় (বিক্রি ইত্যাদি)' },
+  { value: 'withdrawal', label: 'উত্তোলন' },
+];
+const LEDGER_CATEGORIES = [
+  { key: 'farm_expense', label: 'খামার খরচ', color: '#5b5b52' },
+  { key: 'cow', label: 'গরুর আয়-ব্যয়', color: 'var(--cow)' },
+  { key: 'chicken', label: 'মুরগির আয়-ব্যয়', color: 'var(--chicken)' },
+  { key: 'goat', label: 'ছাগলের আয়-ব্যয়', color: 'var(--goat)' },
+  { key: 'fish', label: 'পুকুরের মাছের আয়-ব্যয়', color: '#2E6F8E' },
+];
+const isCredit = t => t === 'deposit' || t === 'income';
+const taka = n => '৳' + Math.round(Number(n||0)).toLocaleString('bn-BD');
+const typeLabel = v => TX_TYPES.find(t=>t.value===v)?.label || v;
+const ledgerLabel = v => LEDGER_CATEGORIES.find(t=>t.key===v)?.label || v;
+
+let currentUser = null;
+let currentRole = null;
+let editUnlocked = false;
+let currentRoute = 'dashboard';
+let routeParam = null;
+function canEdit(){ return editUnlocked; }
+
+setTimeout(() => {
+  const loadingEl = document.getElementById('loading');
+  if (loadingEl && loadingEl.style.display !== 'none') {
+    document.getElementById('loadingHelp').style.display = 'block';
+  }
+}, 6000);
+if (location.protocol === 'file:') {
+  document.getElementById('loadingText').textContent = 'সতর্কতা: file:// থেকে খোলা হয়েছে';
+  document.getElementById('loadingHelp').style.display = 'block';
+}
+
+/* ---------------- Firestore helpers ---------------- */
+async function getMembers(){
+  const snap = await getDocs(query(collection(db,'members'), orderBy('name')));
+  return snap.docs.map(d=>({id:d.id, ...d.data()}));
+}
+async function getMember(id){
+  const snap = await getDoc(doc(db,'members',id));
+  return snap.exists() ? {id:snap.id, ...snap.data()} : null;
+}
+async function addMember(data){
+  return addDoc(collection(db,'members'), {...data, active:true, createdBy: currentUser?.uid || null, createdAt: serverTimestamp()});
+}
+async function updateMember(id, data){ return updateDoc(doc(db,'members',id), data); }
+async function deleteMemberDoc(id){ return deleteDoc(doc(db,'members',id)); }
+
+async function getTransactions({memberId, ledger} = {}){
+  const base = collection(db,'transactions');
+  let q;
+  if(memberId) q = query(base, where('memberId','==',memberId));
+  else if(ledger) q = query(base, where('ledger','==',ledger));
+  else q = query(base, orderBy('date','desc'));
+  const snap = await getDocs(q);
+  const rows = snap.docs.map(d=>({id:d.id, ...d.data()}));
+  return rows.sort((a,b)=> a.date < b.date ? 1 : -1);
+}
+async function addTransaction(data){
+  return addDoc(collection(db,'transactions'), {...data, amount:Number(data.amount), createdBy: currentUser?.uid || null, createdAt: serverTimestamp()});
+}
+async function updateTransactionDoc(id, data){ return updateDoc(doc(db,'transactions',id), {...data, amount:Number(data.amount)}); }
+async function deleteTransactionDoc(id){ return deleteDoc(doc(db,'transactions',id)); }
+
+function calcBalance(txs){
+  return txs.reduce((s,t)=> s + (isCredit(t.type)?1:-1)*Number(t.amount||0), 0);
+}
+
+/* ---------------- Auth: login wall for viewing + PIN wall for editing ---------------- */
+onAuthStateChanged(auth, async (user) => {
+  currentUser = user;
+  document.getElementById('loading').style.display = 'none';
+  if(user){
+    try {
+      const staffSnap = await getDoc(doc(db,'staff',user.uid));
+      currentRole = staffSnap.exists() ? (staffSnap.data().role || null) : null;
+    } catch(e) { currentRole = null; }
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appShell').style.display = 'block';
+    renderTopbarAuthState();
+    navigate('dashboard');
+  } else {
+    currentRole = null;
+    document.getElementById('appShell').style.display = 'none';
+    document.getElementById('loginScreen').style.display = 'flex';
+  }
+});
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value;
+  const password = document.getElementById('loginPassword').value;
+  const errBox = document.getElementById('loginError');
+  errBox.textContent = '';
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+  } catch (err) {
+    errBox.textContent = 'ইমেইল বা পাসওয়ার্ড সঠিক নয়।';
+  }
+});
+
+document.getElementById('signOutBtn').onclick = () => signOut(auth);
+
+function renderTopbarAuthState(){
+  const btn = document.getElementById('authToggleBtn');
+  if(canEdit()){
+    btn.textContent = 'কমিটি মোড ✓ (লক করুন)';
+    btn.onclick = () => { editUnlocked = false; renderTopbarAuthState(); render(); };
+  } else {
+    btn.textContent = 'PIN দিয়ে এডিট আনলক করুন';
+    btn.onclick = () => openPinModal(() => render());
+  }
+}
+
+/* ---------------- Edit-gate helper: prompts for PIN only when needed ---------------- */
+function requireEdit(action){
+  if(canEdit()){ action(); return; }
+  openPinModal(action);
+}
+
+function openPinModal(onSuccess){
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+    <div class="modal-bg"><form class="modal" id="pinForm" style="max-width:320px;">
+      <h2 class="serif" style="font-size:18px;margin:0 0 10px;">এডিট করতে PIN দিন</h2>
+      <label class="field"><span>PIN</span><input type="password" inputmode="numeric" id="pinInput" required placeholder="৬ সংখ্যার কোড" /></label>
+      <div id="pinError" style="color:var(--danger);font-size:13px;margin-bottom:8px;"></div>
+      <div class="rowbtn">
+        <button type="button" class="btn-secondary" id="pinCancel">বাতিল</button>
+        <button type="submit" class="btn-primary">প্রবেশ করুন</button>
+      </div>
+    </form></div>`;
+  document.getElementById('pinCancel').onclick = closeModal;
+  document.getElementById('pinForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const pin = document.getElementById('pinInput').value;
+    const errBox = document.getElementById('pinError');
+    if(pin === COMMITTEE_PIN){
+      editUnlocked = true;
+      renderTopbarAuthState();
+      closeModal();
+      onSuccess();
+    } else {
+      errBox.textContent = 'PIN সঠিক নয়। আবার চেষ্টা করুন।';
+    }
+  };
+}
+
+/* ---------------- Router ---------------- */
+document.getElementById('navBar').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-route]');
+  if(btn) navigate(btn.dataset.route);
+});
+function navigate(route, param=null){
+  currentRoute = route; routeParam = param;
+  document.querySelectorAll('#navBar button').forEach(b=>{
+    b.classList.toggle('active', b.dataset.route === route);
+  });
+  render();
+}
+window.navigate = navigate;
+
+function closeModal(){ document.getElementById('modalRoot').innerHTML = ''; }
+window.closeModal = closeModal;
+
+async function render(){
+  const main = document.getElementById('mainContent');
+  main.innerHTML = '<div style="padding:40px 0;text-align:center;color:#8a8a80;">লোড হচ্ছে…</div>';
+  if(currentRoute === 'dashboard') return renderDashboard(main);
+  if(currentRoute === 'members') return renderMembers(main);
+  if(currentRoute === 'memberDetail') return renderMemberDetail(main, routeParam);
+  if(currentRoute === 'folders') return renderFolders(main);
+  if(currentRoute === 'folderDetail') return renderFolderDetail(main, routeParam);
+  if(currentRoute === 'memberDeposits') return renderMemberDeposits(main);
+  if(currentRoute === 'transactions') return renderTransactions(main);
+}
+
+/* ---------------- Dashboard ---------------- */
+async function renderDashboard(main){
+  const [members, transactions] = await Promise.all([getMembers(), getTransactions()]);
+  const totalDeposit = transactions.filter(t=>isCredit(t.type)).reduce((s,t)=>s+Number(t.amount||0),0);
+  const totalExpense = transactions.filter(t=>!isCredit(t.type)).reduce((s,t)=>s+Number(t.amount||0),0);
+  const perLedger = LEDGER_CATEGORIES.map(c=>{
+    const txs = transactions.filter(tx=>tx.ledger===c.key);
+    return {...c, balance: calcBalance(txs)};
+  });
+  const recent = transactions.slice(0,8);
+
+  main.innerHTML = `
+    <div class="between" style="margin-bottom:14px;">
+      <h1 class="serif" style="font-size:22px;margin:0;">সারসংক্ষেপ</h1>
+      <button class="btn-primary" id="quickAddTx">+ লেনদেন</button>
+    </div>
+    <div class="grid2" style="margin-bottom:14px;">
+      <div class="stat"><div class="label">মোট জমা</div><div class="value tnum" style="color:var(--forest);">${taka(totalDeposit)}</div></div>
+      <div class="stat"><div class="label">মোট খরচ</div><div class="value tnum" style="color:var(--danger);">${taka(totalExpense)}</div></div>
+      ${perLedger.map(c=>`<div class="stat"><div class="label">${c.label}</div><div class="value tnum" style="color:${c.color}">${taka(c.balance)}</div></div>`).join('')}
+    </div>
+    <div class="card">
+      <div class="between" style="margin-bottom:8px;">
+        <h2 class="serif" style="font-size:16px;margin:0;">সাম্প্রতিক লেনদেন</h2>
+        <button class="btn-link" onclick="navigate('transactions')">সব দেখুন</button>
+      </div>
+      ${recent.length===0
+        ? '<div style="text-align:center;color:#8a8a80;font-size:13px;padding:20px 0;">এখনো কোনো লেনদেন নেই।</div>'
+        : recent.map(t=>`
+          <div class="list-item between">
+            <div><div style="font-weight:500;font-size:14px;">${t.category || typeLabel(t.type)}</div><div style="font-size:12px;color:#8a8a80;">${t.date}</div></div>
+            <div class="tnum" style="font-weight:600;color:${isCredit(t.type)?'var(--forest)':'var(--danger)'}">${isCredit(t.type)?'+':'−'}${taka(t.amount)}</div>
+          </div>`).join('')
+      }
+    </div>
+  `;
+  document.getElementById('quickAddTx').onclick = () => requireEdit(() =>
+    openTransactionModal({ members, onSaved: () => navigate('dashboard') })
+  );
+}
+
+/* ---------------- Members ---------------- */
+async function renderMembers(main){
+  const members = await getMembers();
+  main.innerHTML = `
+    <div class="between" style="margin-bottom:14px;">
+      <h1 class="serif" style="font-size:22px;margin:0;">সদস্য</h1>
+      <button class="btn-primary" id="addMemberBtn">+ নতুন সদস্য</button>
+    </div>
+    <div id="memberCards"></div>
+  `;
+  const box = document.getElementById('memberCards');
+  if(members.length===0){
+    box.innerHTML = '<div style="text-align:center;color:#8a8a80;padding:30px 0;">কোনো সদস্য নেই।</div>';
+  } else {
+    box.innerHTML = members.map(m => `
+      <div class="card" style="margin-bottom:10px;">
+        <div class="between">
+          <a href="#" class="member-link" data-id="${m.id}" style="font-weight:600;text-decoration:none;color:var(--ink);font-size:15px;">${m.name}</a>
+          <div>
+            <button class="btn-link edit-member" data-id="${m.id}">সম্পাদনা</button>
+            <button class="btn-danger del-member" data-id="${m.id}" style="margin-left:10px;">মুছুন</button>
+          </div>
+        </div>
+        <div style="font-size:13px;color:#5b5b52;margin-top:4px;">
+          ${m.phone ? `<div>ফোন: ${m.phone}</div>` : ''}
+          ${m.whatsapp ? `<div>WhatsApp: <a href="https://wa.me/${m.whatsapp.replace(/[^0-9]/g,'')}" target="_blank">${m.whatsapp}</a></div>` : ''}
+        </div>
+        <button class="btn-link member-link" data-id="${m.id}" style="margin-top:8px;">হিসাব দেখুন →</button>
+      </div>
+    `).join('');
+  }
+  document.getElementById('addMemberBtn').onclick = () => requireEdit(() =>
+    openMemberModal({ onSaved: () => renderMembers(main) })
+  );
+  box.querySelectorAll('.member-link').forEach(el=>el.onclick=(e)=>{e.preventDefault(); navigate('memberDetail', el.dataset.id);});
+  box.querySelectorAll('.edit-member').forEach(el=>el.onclick=()=>requireEdit(()=>{
+    const m = members.find(x=>x.id===el.dataset.id);
+    openMemberModal({ initial: m, onSaved: () => renderMembers(main) });
+  }));
+  box.querySelectorAll('.del-member').forEach(el=>el.onclick=()=>requireEdit(async()=>{
+    if(!confirm('এই সদস্যকে মুছে ফেলবেন?')) return;
+    await deleteMemberDoc(el.dataset.id);
+    renderMembers(main);
+  }));
+}
+
+function openMemberModal({ initial, onSaved }){
+  const root = document.getElementById('modalRoot');
+  const f = initial || { name:'', phone:'', whatsapp:'', address:'', note:'' };
+  root.innerHTML = `
+    <div class="modal-bg" id="memberModalBg">
+      <form class="modal" id="memberModalForm">
+        <h2 class="serif" style="font-size:18px;margin:0 0 12px;">${initial ? 'সদস্য সম্পাদনা' : 'নতুন সদস্য'}</h2>
+        <label class="field"><span>নাম</span><input required id="f_name" value="${f.name||''}" /></label>
+        <label class="field"><span>ফোন নম্বর</span><input id="f_phone" value="${f.phone||''}" placeholder="01XXXXXXXXX" /></label>
+        <label class="field"><span>WhatsApp নম্বর</span><input id="f_whatsapp" value="${f.whatsapp||''}" placeholder="8801XXXXXXXXX" /></label>
+        <label class="field"><span>ঠিকানা</span><input id="f_address" value="${f.address||''}" /></label>
+        <label class="field"><span>নোট</span><textarea id="f_note" rows="2">${f.note||''}</textarea></label>
+        <div class="rowbtn">
+          <button type="button" class="btn-secondary" id="memberCancel">বাতিল</button>
+          <button type="submit" class="btn-primary">সংরক্ষণ করুন</button>
+        </div>
+      </form>
+    </div>`;
+  document.getElementById('memberCancel').onclick = closeModal;
+  document.getElementById('memberModalForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const data = {
+      name: document.getElementById('f_name').value.trim(),
+      phone: document.getElementById('f_phone').value.trim(),
+      whatsapp: document.getElementById('f_whatsapp').value.trim(),
+      address: document.getElementById('f_address').value.trim(),
+      note: document.getElementById('f_note').value.trim(),
+    };
+    if(!data.name) return;
+    if(initial) await updateMember(initial.id, data);
+    else await addMember(data);
+    closeModal();
+    onSaved();
+  };
+}
+
+/* ---------------- Member detail ---------------- */
+async function renderMemberDetail(main, id){
+  const [member, txs] = await Promise.all([getMember(id), getTransactions({memberId:id})]);
+  if(!member){ main.innerHTML = '<div class="card">সদস্য পাওয়া যায়নি।</div>'; return; }
+  const balance = calcBalance(txs);
+  main.innerHTML = `
+    <button class="btn-link" id="backBtn">← সদস্যদের তালিকায় ফিরুন</button>
+    <div class="card" style="margin:12px 0;">
+      <div class="between" style="align-items:flex-start;">
+        <div>
+          <h1 class="serif" style="font-size:20px;margin:0;">${member.name}</h1>
+          <div style="font-size:13px;color:#5b5b52;margin-top:4px;">
+            ${member.phone ? `<div>ফোন: ${member.phone}</div>` : ''}
+            ${member.whatsapp ? `<div>WhatsApp: ${member.whatsapp}</div>` : ''}
+          </div>
+        </div>
+        <div class="serif tnum" style="font-size:22px;font-weight:700;color:${balance>=0?'var(--forest)':'var(--danger)'}">${taka(balance)}</div>
+      </div>
+      <div class="rowbtn" style="flex-wrap:wrap;">
+        <button class="btn-primary" id="addTxBtn">+ লেনদেন যোগ করুন</button>
+        <button class="btn-secondary" id="pdfBtn">PDF ডাউনলোড</button>
+        ${member.whatsapp ? '<button class="btn-secondary" id="waBtn">WhatsApp-এ পাঠান</button>' : ''}
+      </div>
+    </div>
+    <div class="card">
+      <h2 class="serif" style="font-size:16px;margin:0 0 10px;">লেনদেনের হিসাব</h2>
+      <div id="txTableBox"></div>
+    </div>
+  `;
+  renderTxTable(document.getElementById('txTableBox'), txs, { onChanged: () => renderMemberDetail(main, id) });
+  document.getElementById('backBtn').onclick = () => navigate('members');
+  document.getElementById('addTxBtn').onclick = () => requireEdit(() =>
+    openTransactionModal({ fixedMemberId: id, onSaved: () => renderMemberDetail(main, id) })
+  );
+  document.getElementById('pdfBtn').onclick = () => exportStatementPdf({
+    title: `সদস্য হিসাব — ${member.name}`,
+    metaRows: [
+      { label:'সদস্যের নাম', value: member.name },
+      { label:'ফোন', value: member.phone || '—' },
+      { label:'WhatsApp', value: member.whatsapp || '—' },
+      { label:'ঠিকানা', value: member.address || '—' },
+    ],
+    txs, balance, filename: `${member.name}-hisab.pdf`,
+  });
+  if(member.whatsapp){
+    document.getElementById('waBtn').onclick = () => {
+      const text = encodeURIComponent(`${member.name}-এর হিসাব:\nবর্তমান ব্যালেন্স: ${taka(balance)}\n(বিস্তারিত হিসাব PDF আলাদাভাবে পাঠানো হচ্ছে)`);
+      window.open(`https://wa.me/${member.whatsapp.replace(/[^0-9]/g,'')}?text=${text}`, '_blank');
+    };
+  }
+}
+
+/* ---------------- Folders (fixed ledger categories) ---------------- */
+async function renderFolders(main){
+  const transactions = await getTransactions();
+  main.innerHTML = `
+    <h1 class="serif" style="font-size:22px;margin:0 0 14px;">ফোল্ডার</h1>
+    <div id="folderCards"></div>
+  `;
+  const box = document.getElementById('folderCards');
+  box.innerHTML = LEDGER_CATEGORIES.map(c=>{
+    const bal = calcBalance(transactions.filter(t=>t.ledger===c.key));
+    return `<div class="card folder-link" data-key="${c.key}" style="margin-bottom:10px;cursor:pointer;">
+      <div class="between">
+        <span style="font-weight:600;font-size:15px;color:${c.color};">${c.label}</span>
+        <span class="tnum" style="font-weight:700;color:${bal>=0?'var(--forest)':'var(--danger)'}">${taka(bal)}</span>
+      </div>
+      <div class="btn-link" style="margin-top:6px;">হিসাব দেখুন →</div>
+    </div>`;
+  }).join('');
+  box.querySelectorAll('.folder-link').forEach(el=>el.onclick=()=>navigate('folderDetail', el.dataset.key));
+
+  const extra = document.createElement('div');
+  extra.className = 'card';
+  extra.style.cssText = 'margin-bottom:10px;cursor:pointer;';
+  extra.innerHTML = `
+    <div class="between">
+      <span style="font-weight:600;font-size:15px;">সদস্যদের জমা</span>
+      <span style="font-size:12px;color:#8a8a80;">সবার জমার সারসংক্ষেপ</span>
+    </div>
+    <div class="btn-link" style="margin-top:6px;">দেখুন →</div>
+  `;
+  extra.onclick = () => navigate('memberDeposits');
+  box.appendChild(extra);
+}
+
+/* ---------------- সদস্যদের জমার সারসংক্ষেপ ---------------- */
+async function renderMemberDeposits(main){
+  const [members, transactions] = await Promise.all([getMembers(), getTransactions()]);
+  const totals = {};
+  transactions.forEach(t=>{
+    if(t.type === 'deposit' && t.memberId){
+      totals[t.memberId] = (totals[t.memberId]||0) + Number(t.amount||0);
+    }
+  });
+  const rows = members
+    .map(m => ({ name: m.name, total: totals[m.id] || 0 }))
+    .sort((a,b) => b.total - a.total);
+  const grandTotal = rows.reduce((s,r)=>s+r.total, 0);
+
+  main.innerHTML = `
+    <button class="btn-link" id="backBtn">← ফোল্ডারে ফিরুন</button>
+    <div class="card" style="margin:12px 0;">
+      <div class="between">
+        <h1 class="serif" style="font-size:20px;margin:0;">সদস্যদের জমা</h1>
+        <button class="btn-secondary" id="pdfBtn">PDF ডাউনলোড</button>
+      </div>
+    </div>
+    <div class="card">
+      <table>
+        <thead><tr><th style="text-align:left;">সদস্যের নাম</th><th>মোট জমা</th></tr></thead>
+        <tbody>
+          ${rows.length===0 ? '<tr><td colspan="2" style="text-align:center;color:#8a8a80;padding:20px 0;">কোনো সদস্য নেই।</td></tr>' :
+            rows.map(r=>`<tr><td style="text-align:left;">${r.name}</td><td class="tnum" style="font-weight:600;color:var(--forest);">${taka(r.total)}</td></tr>`).join('')}
+        </tbody>
+        ${rows.length>0 ? `<tfoot><tr><td style="text-align:left;font-weight:700;">সর্বমোট</td><td class="tnum" style="font-weight:700;">${taka(grandTotal)}</td></tr></tfoot>` : ''}
+      </table>
+    </div>
+  `;
+  document.getElementById('backBtn').onclick = () => navigate('folders');
+  document.getElementById('pdfBtn').onclick = () => exportMemberDepositsPdf({ rows, grandTotal, filename: 'sodossyder-joma.pdf' });
+}
+
+/* ---------------- Folder detail ---------------- */
+async function renderFolderDetail(main, key){
+  const cat = LEDGER_CATEGORIES.find(c=>c.key===key);
+  if(!cat){ main.innerHTML = '<div class="card">ফোল্ডার পাওয়া যায়নি।</div>'; return; }
+  const txs = await getTransactions({ ledger: key });
+  const balance = calcBalance(txs);
+  main.innerHTML = `
+    <button class="btn-link" id="backBtn">← ফোল্ডারে ফিরুন</button>
+    <div class="card" style="margin:12px 0;">
+      <div class="between">
+        <h1 class="serif" style="font-size:20px;margin:0;color:${cat.color};">${cat.label}</h1>
+        <div class="serif tnum" style="font-size:22px;font-weight:700;color:${balance>=0?'var(--forest)':'var(--danger)'}">${taka(balance)}</div>
+      </div>
+      <div class="rowbtn">
+        <button class="btn-primary" id="addTxBtn">+ লেনদেন যোগ করুন</button>
+        <button class="btn-secondary" id="pdfBtn">PDF ডাউনলোড</button>
+      </div>
+    </div>
+    <div class="card"><h2 class="serif" style="font-size:16px;margin:0 0 10px;">লেনদেনের হিসাব</h2><div id="txTableBox"></div></div>
+  `;
+  renderTxTable(document.getElementById('txTableBox'), txs, { onChanged: () => renderFolderDetail(main, key) });
+  document.getElementById('backBtn').onclick = () => navigate('folders');
+  document.getElementById('addTxBtn').onclick = () => requireEdit(() =>
+    openTransactionModal({ fixedLedger: key, onSaved: () => renderFolderDetail(main, key) })
+  );
+  document.getElementById('pdfBtn').onclick = () => exportStatementPdf({
+    title: `${cat.label} — হিসাব বিবরণী`,
+    metaRows: [ { label:'ফোল্ডার', value: cat.label } ],
+    txs, balance, filename: `${cat.key}-hisab.pdf`,
+  });
+}
+
+/* ---------------- Transactions (all) ---------------- */
+async function renderTransactions(main){
+  const [txs, members] = await Promise.all([getTransactions(), getMembers()]);
+  main.innerHTML = `
+    <div class="between" style="margin-bottom:14px;">
+      <h1 class="serif" style="font-size:22px;margin:0;">লেনদেন</h1>
+      <button class="btn-primary" id="addTxBtn">+ নতুন লেনদেন</button>
+    </div>
+    <div class="card"><div id="txTableBox"></div></div>
+  `;
+  renderTxTable(document.getElementById('txTableBox'), txs, { onChanged: () => renderTransactions(main), showBalance:false });
+  document.getElementById('addTxBtn').onclick = () => requireEdit(() =>
+    openTransactionModal({ members, onSaved: () => renderTransactions(main) })
+  );
+}
+
+function renderTxTable(container, txs, { onChanged, showBalance=true } = {}){
+  if(txs.length===0){
+    container.innerHTML = '<div style="text-align:center;color:#8a8a80;padding:24px 0;font-size:13px;">এখনো কোনো লেনদেন যোগ করা হয়নি।</div>';
+    return;
+  }
+  const chronological = [...txs].sort((a,b)=> a.date > b.date ? 1 : -1);
+  let running = 0;
+  const withBal = chronological.map(t=>{ running += (isCredit(t.type)?1:-1)*Number(t.amount||0); return {...t, _bal:running}; });
+  const display = [...withBal].reverse();
+  container.innerHTML = `
+    <div style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>তারিখ</th><th>ধরন</th><th>বিবরণ</th><th>পরিমাণ</th>${showBalance?'<th>ব্যালেন্স</th>':''}<th></th></tr></thead>
+      <tbody>
+        ${display.map(t=>`
+          <tr>
+            <td class="tnum">${t.date}</td>
+            <td><span class="chip ${isCredit(t.type)?'chip-credit':'chip-debit'}">${typeLabel(t.type)}</span></td>
+            <td style="text-align:left;color:#5b5b52;">${[t.category,t.note].filter(Boolean).join(' — ')||'—'}</td>
+            <td class="tnum" style="font-weight:600;color:${isCredit(t.type)?'var(--forest)':'var(--danger)'}">${isCredit(t.type)?'+':'−'}${taka(t.amount)}</td>
+            ${showBalance?`<td class="tnum">${taka(t._bal)}</td>`:''}
+            <td><button class="btn-danger del-tx" data-id="${t.id}">মুছুন</button></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+    </div>`;
+  container.querySelectorAll('.del-tx').forEach(el=>el.onclick=()=>requireEdit(async()=>{
+    if(!confirm('এই লেনদেনটি মুছে ফেলবেন?')) return;
+    await deleteTransactionDoc(el.dataset.id);
+    onChanged();
+  }));
+}
+
+function openTransactionModal({ fixedMemberId, fixedLedger, members, onSaved }){
+  const root = document.getElementById('modalRoot');
+  const today = new Date().toISOString().slice(0,10);
+  root.innerHTML = `
+    <div class="modal-bg"><form class="modal" id="txForm">
+      <h2 class="serif" style="font-size:18px;margin:0 0 12px;">নতুন লেনদেন</h2>
+      <div class="grid2">
+        <label class="field"><span>তারিখ</span><input type="date" id="t_date" value="${today}" required /></label>
+        <label class="field"><span>ধরন</span><select id="t_type">${TX_TYPES.map(t=>`<option value="${t.value}">${t.label}</option>`).join('')}</select></label>
+      </div>
+      <label class="field"><span>পরিমাণ (টাকা)</span><input type="number" min="0" id="t_amount" required placeholder="যেমন: ৫০০" /></label>
+      ${!fixedMemberId ? `<label class="field"><span>সদস্য (ঐচ্ছিক)</span><select id="t_member"><option value="">— নির্বাচন করুন —</option>${(members||[]).map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</select></label>` : ''}
+      ${!fixedLedger ? `<label class="field"><span>ফোল্ডার (ঐচ্ছিক)</span><select id="t_ledger"><option value="">— নির্বাচন করুন —</option>${LEDGER_CATEGORIES.map(c=>`<option value="${c.key}">${c.label}</option>`).join('')}</select></label>` : ''}
+      <label class="field"><span>খাত (যেমন: খাবার, ওষুধ, বিক্রি)</span><input id="t_category" /></label>
+      <label class="field"><span>নোট</span><textarea id="t_note" rows="2"></textarea></label>
+      <div class="rowbtn">
+        <button type="button" class="btn-secondary" id="txCancel">বাতিল</button>
+        <button type="submit" class="btn-primary">সংরক্ষণ করুন</button>
+      </div>
+    </form></div>`;
+  document.getElementById('txCancel').onclick = closeModal;
+  document.getElementById('txForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const amount = document.getElementById('t_amount').value;
+    if(!amount || Number(amount) <= 0) return;
+    const data = {
+      date: document.getElementById('t_date').value,
+      type: document.getElementById('t_type').value,
+      amount: Number(amount),
+      memberId: fixedMemberId || document.getElementById('t_member')?.value || '',
+      ledger: fixedLedger || document.getElementById('t_ledger')?.value || '',
+      category: document.getElementById('t_category').value.trim(),
+      note: document.getElementById('t_note').value.trim(),
+    };
+    await addTransaction(data);
+    closeModal();
+    onSaved();
+  };
+}
+
+/* ---------------- PDF export (loads jsPDF + html2canvas from CDN on demand) ---------------- */
+let pdfLibsLoaded = false;
+function loadScript(src){
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+async function ensurePdfLibs(){
+  if(pdfLibsLoaded) return;
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+  pdfLibsLoaded = true;
+}
+
+async function captureWrapperToPdf(wrapper, filename){
+  document.body.appendChild(wrapper);
+  try {
+    const canvas = await window.html2canvas(wrapper, { scale: 2, backgroundColor: '#FFFDF8' });
+    const imgData = canvas.toDataURL('image/png');
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit:'pt', format:'a4' });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pageWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    let heightLeft = imgHeight, position = 0;
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+    while(heightLeft > 0){
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+    }
+    pdf.save(filename);
+  } finally {
+    document.body.removeChild(wrapper);
+  }
+}
+
+function pdfHeader(title){
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #1F4D3D;padding-bottom:14px;margin-bottom:18px;">
+      <div><div style="font-size:22px;font-weight:700;color:#1F4D3D;">বন্ধু মহল এগ্রো ফার্ম</div></div>
+      <div style="font-size:12px;color:#5b5b52;">তৈরির তারিখ: ${new Date().toLocaleDateString('bn-BD')}</div>
+    </div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:12px;">${title}</div>
+  `;
+}
+
+async function exportStatementPdf({ title, metaRows, txs, balance, filename }){
+  await ensurePdfLibs();
+  const chronological = [...txs].sort((a,b)=> a.date > b.date ? 1 : -1);
+  let running = 0;
+  const rows = chronological.map(t=>{
+    const credit = isCredit(t.type);
+    running += (credit?1:-1)*Number(t.amount||0);
+    return { date:t.date, credit: credit?taka(t.amount):'—', debit: !credit?taka(t.amount):'—', desc:[t.category,t.note].filter(Boolean).join(' — ')||'—', bal: taka(running) };
+  });
+
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'position:fixed;left:-99999px;top:0;width:794px;background:#FFFDF8;padding:40px;font-family:"Hind Siliguri",sans-serif;color:#232420;';
+  wrapper.innerHTML = `
+    ${pdfHeader(title)}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px;margin-bottom:16px;">
+      ${metaRows.map(m=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #DCD3B8;font-size:14px;"><span style="color:#5b5b52;">${m.label}</span><span style="font-weight:600;">${m.value}</span></div>`).join('')}
+    </div>
+    <table style="width:100%;border-collapse:collapse;direction:rtl;">
+      <thead><tr>
+        <th style="text-align:left;padding:8px 6px;border-bottom:2px solid #1F4D3D;font-size:13px;color:#1F4D3D;">ব্যালেন্স</th>
+        <th style="text-align:left;padding:8px 6px;border-bottom:2px solid #1F4D3D;font-size:13px;color:#1F4D3D;">খরচ</th>
+        <th style="text-align:left;padding:8px 6px;border-bottom:2px solid #1F4D3D;font-size:13px;color:#1F4D3D;">জমা/আয়</th>
+        <th style="text-align:left;padding:8px 6px;border-bottom:2px solid #1F4D3D;font-size:13px;color:#1F4D3D;">বিবরণ</th>
+        <th style="text-align:right;padding:8px 6px;border-bottom:2px solid #1F4D3D;font-size:13px;color:#1F4D3D;">তারিখ</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map((r,i)=>`<tr style="background:${i%2?'#F6F1E4':'transparent'};">
+          <td style="padding:7px 6px;font-size:13px;border-bottom:1px solid #EFE9D8;">${r.bal}</td>
+          <td style="padding:7px 6px;font-size:13px;border-bottom:1px solid #EFE9D8;">${r.debit}</td>
+          <td style="padding:7px 6px;font-size:13px;border-bottom:1px solid #EFE9D8;">${r.credit}</td>
+          <td style="padding:7px 6px;font-size:13px;border-bottom:1px solid #EFE9D8;">${r.desc}</td>
+          <td style="padding:7px 6px;font-size:13px;border-bottom:1px solid #EFE9D8;text-align:right;">${r.date}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    <div style="margin-top:16px;display:flex;justify-content:flex-end;">
+      <div style="background:#1F4D3D;color:#FFFDF8;padding:10px 18px;border-radius:6px;font-size:15px;font-weight:700;">বর্তমান ব্যালেন্স: ${taka(balance)}</div>
+    </div>
+    <div style="margin-top:36px;display:flex;justify-content:space-between;font-size:12px;color:#5b5b52;">
+      <div>স্বাক্ষর (সদস্য): ______________________</div>
+      <div>স্বাক্ষর (কর্মকর্তা): ______________________</div>
+    </div>
+  `;
+  await captureWrapperToPdf(wrapper, filename);
+}
+
+async function exportMemberDepositsPdf({ rows, grandTotal, filename }){
+  await ensurePdfLibs();
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'position:fixed;left:-99999px;top:0;width:794px;background:#FFFDF8;padding:40px;font-family:"Hind Siliguri",sans-serif;color:#232420;';
+  wrapper.innerHTML = `
+    ${pdfHeader('সদস্যদের জমা — সারসংক্ষেপ')}
+    <table style="width:100%;border-collapse:collapse;direction:rtl;">
+      <thead><tr>
+        <th style="text-align:left;padding:8px 6px;border-bottom:2px solid #1F4D3D;font-size:13px;color:#1F4D3D;">মোট জমা</th>
+        <th style="text-align:right;padding:8px 6px;border-bottom:2px solid #1F4D3D;font-size:13px;color:#1F4D3D;">সদস্যের নাম</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map((r,i)=>`<tr style="background:${i%2?'#F6F1E4':'transparent'};">
+          <td style="padding:7px 6px;font-size:13px;border-bottom:1px solid #EFE9D8;">${taka(r.total)}</td>
+          <td style="padding:7px 6px;font-size:13px;border-bottom:1px solid #EFE9D8;text-align:right;">${r.name}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    <div style="margin-top:16px;display:flex;justify-content:flex-end;">
+      <div style="background:#1F4D3D;color:#FFFDF8;padding:10px 18px;border-radius:6px;font-size:15px;font-weight:700;">সর্বমোট জমা: ${taka(grandTotal)}</div>
+    </div>
+  `;
+  await captureWrapperToPdf(wrapper, filename);
+}
+</script>
+</body>
+</html>
